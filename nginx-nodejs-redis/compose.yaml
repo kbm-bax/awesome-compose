@@ -1,27 +1,36 @@
-
 services:
   redis:
-    image: 'redislabs/redismod'
-    ports:
-      - '6379:6379'
+    image: 'redis:7.4'
+    networks:
+      - backend
   web1:
     restart: on-failure
     build: ./web
     hostname: web1
     ports:
       - '81:5000'
+    networks:
+      - frontend
+      - backend
   web2:
     restart: on-failure
     build: ./web
     hostname: web2
     ports:
       - '82:5000'
+    networks:
+      - frontend
+      - backend
   nginx:
     build: ./nginx
     ports:
     - '80:80'
+    networks:
+      - frontend
     depends_on:
     - web1
     - web2
-
-
+networks:
+  frontend:
+  backend:
+    internal: true
