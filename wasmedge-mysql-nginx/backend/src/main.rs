@@ -1,3 +1,4 @@
+use hyper::body::HttpBody;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, StatusCode, Server};
 pub use mysql_async::prelude::*;
@@ -6,7 +7,9 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::result::Result;
 use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+const MAX_BODY_BYTES: usize = 64 * 1024;
 
 fn get_url() -> String {
     if let Ok(url) = std::env::var("DATABASE_URL") {
@@ -83,10 +86,11 @@ async fn handle_request(req: Request<Body>, pool: Pool) -> Result<Response<Body>
         }
 
         (&Method::POST, "/create_order") => {
+            let order: Order = match read_json(req).await {
+                Ok(order) => order,
+                Err(resp) => return Ok(resp),
+            };
             let mut conn = pool.get_conn().await.unwrap();
-
-            let byte_stream = hyper::body::to_bytes(req).await?;
-            let order: Order = serde_json::from_slice(&byte_stream).unwrap();
 
             "INSERT INTO orders (order_id, product_id, quantity, amount, shipping, tax, shipping_address) VALUES (:order_id, :product_id, :quantity, :amount, :shipping, :tax, :shipping_address)"
                 .with(params! {
@@ -106,10 +110,11 @@ async fn handle_request(req: Request<Body>, pool: Pool) -> Result<Response<Body>
         }
 
         (&Method::POST, "/create_orders") => {
+            let orders: Vec<Order> = match read_json(req).await {
+                Ok(orders) => orders,
+                Err(resp) => return Ok(resp),
+            };
             let mut conn = pool.get_conn().await.unwrap();
-
-            let byte_stream = hyper::body::to_bytes(req).await?;
-            let orders: Vec<Order> = serde_json::from_slice(&byte_stream).unwrap();
 
             "INSERT INTO orders (order_id, product_id, quantity, amount, shipping, tax, shipping_address) VALUES (:order_id, :product_id, :quantity, :amount, :shipping, :tax, :shipping_address)"
                 .with(orders.iter().map(|order| {
@@ -131,10 +136,11 @@ async fn handle_request(req: Request<Body>, pool: Pool) -> Result<Response<Body>
         }
 
         (&Method::POST, "/update_order") => {
+            let order: Order = match read_json(req).await {
+                Ok(order) => order,
+                Err(resp) => return Ok(resp),
+            };
             let mut conn = pool.get_conn().await.unwrap();
-
-            let byte_stream = hyper::body::to_bytes(req).await?;
-            let order: Order = serde_json::from_slice(&byte_stream).unwrap();
 
             "UPDATE orders SET product_id=:product_id, quantity=:quantity, amount=:amount, shipping=:shipping, tax=:tax, shipping_address=:shipping_address WHERE order_id=:order_id"
                 .with(params! {
@@ -198,6 +204,33 @@ async fn handle_request(req: Request<Body>, pool: Pool) -> Result<Response<Body>
             Ok(not_found)
         }
     }
+}
+
+// Reads at most MAX_BODY_BYTES of the request body and parses it as JSON.
+// The size is enforced while streaming, so an oversized or chunked body is
+// refused without being buffered in full.
+async fn read_json<T: DeserializeOwned>(req: Request<Body>) -> Result<T, Response<Body>> {
+    let mut body = req.into_body();
+    if body.size_hint().lower() > MAX_BODY_BYTES as u64 {
+        return Err(status_response(StatusCode::PAYLOAD_TOO_LARGE));
+    }
+
+    let mut buf = Vec::new();
+    while let Some(chunk) = body.data().await {
+        let chunk = chunk.map_err(|_| status_response(StatusCode::BAD_REQUEST))?;
+        if buf.len() + chunk.len() > MAX_BODY_BYTES {
+            return Err(status_response(StatusCode::PAYLOAD_TOO_LARGE));
+        }
+        buf.extend_from_slice(&chunk);
+    }
+
+    serde_json::from_slice(&buf).map_err(|_| status_response(StatusCode::BAD_REQUEST))
+}
+
+fn status_response(status: StatusCode) -> Response<Body> {
+    let mut resp = response_build("{\"status\":false}");
+    *resp.status_mut() = status;
+    resp
 }
 
 // CORS headers
