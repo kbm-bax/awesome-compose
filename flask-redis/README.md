@@ -16,18 +16,30 @@ Project structure:
 
 ```
 services:
-   redis: 
-     image: redislabs/redismod
-     ports:
-       - '6379:6379' 
-   web:
-        build: .
-        ports:
-            - "8000:8000"
-        volumes:
-            - .:/code
-        depends_on:
-            - redis
+  redis:
+    image: redis:7.4
+    networks:
+      - backend
+  web:
+    build:
+      context: .
+      target: builder
+    # flask requires SIGINT to stop gracefully
+    # (default stop signal from Compose is SIGTERM)
+    stop_signal: SIGINT
+    ports:
+      - '8000:8000'
+    volumes:
+      - .:/code
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      - redis
+networks:
+  frontend:
+  backend:
+    internal: true
 ```
 
 ## Deploy with docker compose
@@ -48,12 +60,12 @@ $ docker compose up -d
 
 ## Expected result
 
-Listing containers must show one container running and the port mapping as below:
+Listing containers must show two containers running and the port mapping as below:
 ```
 
 $ docker compose ps
 NAME                  COMMAND                  SERVICE             STATUS              PORTS
-flask-redis-redis-1   "redis-server --load…"   redis               running             0.0.0.0:6379->6379/tcp
+flask-redis-redis-1   "docker-entrypoint.s…"   redis               running             6379/tcp
 flask-redis-web-1     "/bin/sh -c 'python …"   web                 running             0.0.0.0:8000->8000/tcp
 ```
 
@@ -65,10 +77,10 @@ This webpage has been viewed 2 time(s)
 
 ## Monitoring Redis keys
 
-Connect to redis database by using ```redis-cli``` command and monitor the keys.
+Redis is only reachable on the internal `backend` network, so its port is not published on the host.
+Run ```redis-cli``` inside the Redis container to monitor the keys.
 ```
-redis-cli -p 6379
-127.0.0.1:6379> monitor
+$ docker compose exec redis redis-cli monitor
 OK
 1646634062.732496 [0 172.21.0.3:33106] "INCRBY" "hits" "1"
 1646634062.735669 [0 172.21.0.3:33106] "GET" "hits"
