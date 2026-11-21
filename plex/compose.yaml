@@ -2,9 +2,16 @@ services:
   plex:
     image: linuxserver/plex
     container_name: plex
-    network_mode: host
+    # An unclaimed server accepts setup and claim requests from any client on
+    # its subnet, so keep it on loopback until it has been claimed.
+    ports:
+      - ${PLEX_BIND_ADDRESS:-127.0.0.1}:32400:32400
     environment:
       - VERSION=docker
+      - PLEX_CLAIM=${PLEX_CLAIM:?set PLEX_CLAIM in .env to a fresh claim token from https://www.plex.tv/claim}
     restart: always
     volumes:
+      - plex-config:/config
       - ${PLEX_MEDIA_PATH}:/media/
+volumes:
+  plex-config:
