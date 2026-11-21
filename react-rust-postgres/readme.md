@@ -8,6 +8,8 @@ Project structure:
 │   ├── Dockerfile
 │   ...
 ├── compose.yaml
+├── db
+│   └── password.txt   (created by you, not committed)
 ├── frontend
 │   ├── ...
 │   └── Dockerfile
@@ -32,6 +34,16 @@ services:
 The compose file defines an application with three services `frontend`, `backend` and `db`.
 When deploying the application, docker compose maps port 3000 of the frontend service container to port 3000 of the host as specified in the file.
 Make sure port 3000 on the host is not already being in use.
+The database is only reachable from the backend on the `server-side` network; its port is not published on the host.
+
+The database password is not stored in the repository. It is passed to the `db` and `backend` services as a
+[Compose secret](https://docs.docker.com/compose/how-tos/use-secrets/) read from `db/password.txt`, which is ignored
+by git. Create it before the first start, for example with a random value:
+
+```
+$ mkdir -p db
+$ openssl rand -base64 24 > db/password.txt
+```
 
 ## Deploy with docker compose
 
@@ -55,7 +67,7 @@ $ docker ps
 CONTAINER ID        IMAGE                          COMMAND                  CREATED             STATUS              PORTS                    NAMES
 30b7d9dc4898        react-rust-postgres_backend    "cargo run --offline"    37 seconds ago      Up 35 seconds       8000/tcp                 react-rust-postgres_backend_1
 0bca0cb682b8        react-rust-postgres_frontend   "docker-entrypoint.s…"   42 seconds ago      Up 41 seconds       0.0.0.0:3000->3000/tcp   react-rust-postgres_frontend_1
-1611961bf3d1        postgres:12-alpine             "docker-entrypoint.s…"   42 seconds ago      Up 36 seconds       0.0.0.0:5432->5432/tcp   react-rust-postgres_db_1
+1611961bf3d1        postgres:12-alpine             "docker-entrypoint.s…"   42 seconds ago      Up 36 seconds       5432/tcp                 react-rust-postgres_db_1
 ```
 
 After the application starts, navigate to `http://localhost:3000` in your web browser to get a colorful message.

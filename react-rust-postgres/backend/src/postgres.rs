@@ -18,7 +18,10 @@ fn create_config() -> Config {
     if let Ok(user) = std::env::var("PG_USER") {
         cfg.user = Some(user);
     }
-    if let Ok(password) = std::env::var("PG_PASSWORD") {
+    if let Ok(path) = std::env::var("PG_PASSWORD_FILE") {
+        let password = std::fs::read_to_string(&path).expect("couldn't read PG_PASSWORD_FILE");
+        cfg.password = Some(password.trim_end_matches(&['\r', '\n'][..]).to_string());
+    } else if let Ok(password) = std::env::var("PG_PASSWORD") {
         cfg.password = Some(password);
     }
     cfg

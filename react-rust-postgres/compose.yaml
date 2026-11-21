@@ -21,7 +21,9 @@ services:
       - PG_DBNAME=postgres
       - PG_HOST=db
       - PG_USER=postgres
-      - PG_PASSWORD=mysecretpassword
+      - PG_PASSWORD_FILE=/run/secrets/db-password
+    secrets:
+      - db-password
     networks:
       - client-side
       - server-side
@@ -35,11 +37,13 @@ services:
     image: postgres:12-alpine
     restart: always
     environment:
-      - POSTGRES_PASSWORD=mysecretpassword
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
+    secrets:
+      - db-password
     networks:
       - server-side
-    ports:
-      - 5432:5432
+    expose:
+      - 5432
     volumes:
       - db-data:/var/lib/postgresql/data
 
@@ -50,3 +54,8 @@ networks:
 volumes:
   backend-cache: {}
   db-data: {}
+
+# Created at deploy time and never committed (see readme.md and .gitignore).
+secrets:
+  db-password:
+    file: db/password.txt
