@@ -1,10 +1,12 @@
+const fs = require('fs');
 const os = require('os');
 const express = require('express');
 const app = express();
 const redis = require('redis');
 const redisClient = redis.createClient({
   host: 'redis',
-  port: 6379
+  port: 6379,
+  password: fs.readFileSync(process.env.REDIS_PASSWORD_FILE, 'utf8').trim()
 });
 
 app.get('/', function(req, res) {

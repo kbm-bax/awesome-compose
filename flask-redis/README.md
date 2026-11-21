@@ -16,19 +16,41 @@ Project structure:
 
 ```
 services:
-   redis: 
+   redis-auth:
      image: redislabs/redismod
-     ports:
-       - '6379:6379' 
+     entrypoint: ['sh', '-c']
+     command:
+       - |
+         ...
+     volumes:
+       - redis-auth:/run/redis-auth
+   redis:
+     image: redislabs/redismod
+     command:
+       - /run/redis-auth/redis.conf
+       - --loadmodule
+       ...
+     volumes:
+       - redis-auth:/run/redis-auth:ro
+     depends_on:
+       redis-auth:
+         condition: service_completed_successfully
    web:
         build: .
         ports:
             - "8000:8000"
+        environment:
+            - REDIS_PASSWORD_FILE=/run/redis-auth/password
         volumes:
             - .:/code
+            - redis-auth:/run/redis-auth:ro
         depends_on:
-            - redis
+            ...
+volumes:
+   redis-auth:
 ```
+
+Redis is not published on the host and requires a password. On first start, the one-shot `redis-auth` service generates a random password into the `redis-auth` volume; Redis loads it with `requirepass` and the web service reads it from `REDIS_PASSWORD_FILE`.
 
 ## Deploy with docker compose
 
@@ -53,7 +75,7 @@ Listing containers must show one container running and the port mapping as below
 
 $ docker compose ps
 NAME                  COMMAND                  SERVICE             STATUS              PORTS
-flask-redis-redis-1   "redis-server --load…"   redis               running             0.0.0.0:6379->6379/tcp
+flask-redis-redis-1   "redis-server /run/r…"   redis               running             6379/tcp
 flask-redis-web-1     "/bin/sh -c 'python …"   web                 running             0.0.0.0:8000->8000/tcp
 ```
 
@@ -65,10 +87,9 @@ This webpage has been viewed 2 time(s)
 
 ## Monitoring Redis keys
 
-Connect to redis database by using ```redis-cli``` command and monitor the keys.
+Connect to redis database by using ```redis-cli``` inside the redis container and monitor the keys.
 ```
-redis-cli -p 6379
-127.0.0.1:6379> monitor
+$ docker compose exec redis sh -c 'REDISCLI_AUTH="$(cat /run/redis-auth/password)" redis-cli monitor'
 OK
 1646634062.732496 [0 172.21.0.3:33106] "INCRBY" "hits" "1"
 1646634062.735669 [0 172.21.0.3:33106] "GET" "hits"

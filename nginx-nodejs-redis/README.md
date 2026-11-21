@@ -21,22 +21,41 @@ Project structure:
 ```
 [_compose.yaml_](compose.yaml)
 ```
-redis:
+services:
+  redis-auth:
     image: 'redislabs/redismod'
-    ports:
-      - '6379:6379'
+    entrypoint: ['sh', '-c']
+    command:
+      - |
+        ...
+    volumes:
+      - redis-auth:/run/redis-auth
+  redis:
+    image: 'redislabs/redismod'
+    command:
+      - /run/redis-auth/redis.conf
+      - --loadmodule
+      ...
+    volumes:
+      - redis-auth:/run/redis-auth:ro
+    depends_on:
+      redis-auth:
+        condition: service_completed_successfully
   web1:
     restart: on-failure
     build: ./web
     hostname: web1
     ports:
       - '81:5000'
+    environment:
+      - REDIS_PASSWORD_FILE=/run/redis-auth/password
+    volumes:
+      - redis-auth:/run/redis-auth:ro
+    depends_on:
+      redis-auth:
+        condition: service_completed_successfully
   web2:
-    restart: on-failure
-    build: ./web
-    hostname: web2
-    ports:
-      - '82:5000'
+    ...
   nginx:
     build: ./nginx
     ports:
@@ -44,13 +63,18 @@ redis:
     depends_on:
     - web1
     - web2
+volumes:
+  redis-auth:
 ```
-The compose file defines an application with four services `redis`, `nginx`, `web1` and `web2`.
+The compose file defines an application with four services `redis`, `nginx`, `web1` and `web2`, plus a one-shot `redis-auth` service.
 When deploying the application, docker compose maps port 80 of the nginx service container to port 80 of the host as specified in the file.
 
 
 > ℹ️ **_INFO_**  
-> Redis runs on port 6379 by default. Make sure port 6379 on the host is not being used by another container, otherwise the port should be changed.
+> Redis is not published on the host and requires a password. On first start, `redis-auth` generates a random password into the `redis-auth` volume; Redis loads it with `requirepass` and the web services read it from `REDIS_PASSWORD_FILE`. To use `redis-cli`, run it inside the container:
+> ```
+> docker compose exec redis sh -c 'REDISCLI_AUTH="$(cat /run/redis-auth/password)" redis-cli'
+> ```
 
 ## Deploy with docker compose
 

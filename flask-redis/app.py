@@ -1,8 +1,14 @@
+import os
+
 from flask import Flask
 from redis import Redis
 
 app = Flask(__name__)
-redis = Redis(host='redis', port=6379)
+
+with open(os.environ['REDIS_PASSWORD_FILE']) as password_file:
+    redis_password = password_file.read().strip()
+
+redis = Redis(host='redis', port=6379, password=redis_password)
 
 @app.route('/')
 def hello():
