@@ -1,8 +1,8 @@
 services:
   redis:
-    image: redislabs/redismod
-    ports:
-      - '6379:6379'
+    image: redis:7.4
+    networks:
+      - backend
   web:
     build:
       context: .
@@ -14,5 +14,12 @@ services:
       - '8000:8000'
     volumes:
       - .:/code
+    networks:
+      - frontend
+      - backend
     depends_on:
       - redis
+networks:
+  frontend:
+  backend:
+    internal: true
