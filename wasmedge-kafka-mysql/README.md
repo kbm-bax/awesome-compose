@@ -37,12 +37,9 @@ services:
       - --advertise-kafka-addr PLAINTEXT://redpanda:29092,OUTSIDE://redpanda:9092
       - --pandaproxy-addr 0.0.0.0:8082
       - --advertise-pandaproxy-addr localhost:8082
-    ports:
-      - 8081:8081
-      - 8082:8082
-      - 9092:9092
-      - 9644:9644
-      - 29092:29092
+    # The broker runs without authentication, so its Kafka, HTTP proxy, admin,
+    # and schema registry ports stay on the compose network and are not
+    # published on the host. Use `docker compose exec redpanda rpk ...` instead.
     volumes:
       - ./kafka:/app
 
@@ -68,6 +65,8 @@ services:
 
 The compose file defines an application with three services `redpanda`, `etl` and `db`. The `redpanda` service is a Kafka-compatible messaging server that produces messages in a queue topic. The `etl` service, in the WasmEdge container that subscribes to the queue topic and receives incoming messages. Each incoming message is parsed and stored in the `db` MySQL (MariaDB) database server.
 
+Redpanda is started without authentication, so none of its ports are published on the host. Only the services on the compose network can reach the broker, and you send messages with `rpk` from inside the `redpanda` container as shown below.
+
 ## Deploy with docker compose
 
 ```bash
@@ -86,7 +85,7 @@ $ docker compose ps
 NAME                              COMMAND                  SERVICE             STATUS              PORTS
 wasmedge-kafka-mysql-db-1         "docker-entrypoint.s…"   db                  running             3306/tcp
 wasmedge-kafka-mysql-etl-1        "kafka.wasm"             etl                 running
-wasmedge-kafka-mysql-redpanda-1   "/entrypoint.sh 'red…"   redpanda            running             0.0.0.0:8081-8082->8081-8082/tcp, :::8081-8082->8081-8082/tcp, 0.0.0.0:9092->9092/tcp, :::9092->9092/tcp, 0.0.0.0:9644->9644/tcp, :::9644->9644/tcp, 0.0.0.0:29092->29092/tcp, :::29092->29092/tcp
+wasmedge-kafka-mysql-redpanda-1   "/entrypoint.sh 'red…"   redpanda            running             8081-8082/tcp, 9092/tcp, 9644/tcp
 ```
 
 After the application starts, 
