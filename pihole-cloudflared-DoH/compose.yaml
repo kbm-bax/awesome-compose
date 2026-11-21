@@ -3,13 +3,12 @@ services:
   cloudflared:
     image: visibilityspots/cloudflared
     container_name: cloudflared
-    ports:
-      - "5054:5054/tcp"
-      - "5054:5054/udp"
+    # Not published on the host: Pi-hole is the only client and reaches the
+    # proxy over dns-net, so publishing it would expose an open resolver.
     environment:
       - TZ=${TIMEZONE}
       - PORT=5054
-      - ADDRESS=0.0.0.0
+      - ADDRESS=172.20.0.2 # must match ipv4_address below and PIHOLE_DNS_
     restart: always
     networks:
       dns-net:

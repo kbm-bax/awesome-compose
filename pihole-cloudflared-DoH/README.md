@@ -25,9 +25,8 @@ services:
     ...
   cloudflared:
     image: visibilityspots/cloudflared
-    ports:
-      - "5054:5054/tcp"
-      - "5054:5054/udp"
+    environment:
+      - ADDRESS=172.20.0.2
     ...
 ```
 
@@ -70,8 +69,10 @@ Check containers are running and the port mapping:
 $ docker ps
 CONTAINER ID   IMAGE                                 COMMAND                  CREATED         STATUS                            PORTS                                                                                                     NAMES
 afcf5ca4214c   pihole/pihole:latest                  "/s6-init"               3 seconds ago   Up 3 seconds (health: starting)   0.0.0.0:53->53/udp, 0.0.0.0:53->53/tcp, 0.0.0.0:67->67/udp, 0.0.0.0:8080->80/tcp, 0.0.0.0:8443->443/tcp   pihole
-dfd49ab7a372   visibilityspots/cloudflared           "/bin/sh -c '/usr/lo…"   4 seconds ago   Up 3 seconds (health: starting)   0.0.0.0:5054->5054/tcp, 0.0.0.0:5054->5054/udp                                                            cloudflared
+dfd49ab7a372   visibilityspots/cloudflared           "/bin/sh -c '/usr/lo…"   4 seconds ago   Up 3 seconds                                                                                                                                cloudflared
 ```
+
+The cloudflared DoH proxy is intentionally not published on the host. Pi-hole reaches it on the internal `dns-net` network at `172.20.0.2#5054`.
 
 Navigate to `http://localhost:8080` in your web browser to access the installed Pi-hole web interface.
 
