@@ -4,10 +4,13 @@ services:
     image: postgres:latest
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PW}
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
       - POSTGRES_DB=${POSTGRES_DB} #optional (specify default database instead of $POSTGRES_DB)
-    ports:
-      - "5432:5432"
+    secrets:
+      - postgres_password
+    # Only reachable from pgadmin on the compose network; not published on the host.
+    expose:
+      - 5432
     restart: always
 
   pgadmin:
@@ -15,7 +18,16 @@ services:
     image: dpage/pgadmin4:latest
     environment:
       - PGADMIN_DEFAULT_EMAIL=${PGADMIN_MAIL}
-      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PW}
+      - PGADMIN_DEFAULT_PASSWORD_FILE=/run/secrets/pgadmin_password
+    secrets:
+      - pgadmin_password
     ports:
       - "5050:80"
     restart: always
+
+# Created at deploy time and never committed (see README.md and .gitignore).
+secrets:
+  postgres_password:
+    file: secrets/postgres_password.txt
+  pgadmin_password:
+    file: secrets/pgadmin_password.txt
