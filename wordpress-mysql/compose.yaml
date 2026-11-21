@@ -1,3 +1,8 @@
+x-wordpress-env: &wordpress-env
+  - WORDPRESS_DB_HOST=db
+  - WORDPRESS_DB_USER=wordpress
+  - WORDPRESS_DB_PASSWORD=wordpress
+  - WORDPRESS_DB_NAME=wordpress
 services:
   db:
     # We use a mariadb image which supports both amd64 & arm64 architecture
@@ -13,21 +18,58 @@ services:
       - MYSQL_DATABASE=wordpress
       - MYSQL_USER=wordpress
       - MYSQL_PASSWORD=wordpress
+    healthcheck:
+      # TCP only answers once the image's init server (started with --skip-networking) has finished.
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
     expose:
       - 3306
       - 33060
   wordpress:
     image: wordpress:latest
+    # Port 80 is only published once wordpress-setup has created the administrator,
+    # so the installation wizard is never reachable.
+    depends_on:
+      wordpress-setup:
+        condition: service_completed_successfully
+    volumes:
+      - wp_data:/var/www/html
     ports:
       - 80:80
     restart: always
-    environment:
-      - WORDPRESS_DB_HOST=db
-      - WORDPRESS_DB_USER=wordpress
-      - WORDPRESS_DB_PASSWORD=wordpress
-      - WORDPRESS_DB_NAME=wordpress
+    environment: *wordpress-env
+  wordpress-setup:
+    image: wordpress:cli
+    depends_on:
+      db:
+        condition: service_healthy
+      wordpress-files:
+        condition: service_completed_successfully
+    volumes:
+      - wp_data:/var/www/html
+    environment: *wordpress-env
+    # Without --admin_password, WP-CLI generates one and prints it once:
+    #   docker compose logs wordpress-setup
+    command:
+      - sh
+      - -c
+      - >-
+        wp core is-installed ||
+        wp core install
+        --url="${WORDPRESS_URL:-http://localhost}"
+        --title="${WORDPRESS_TITLE:-WordPress}"
+        --admin_user="${WORDPRESS_ADMIN_USER:-admin}"
+        --admin_email="${WORDPRESS_ADMIN_EMAIL:-admin@example.com}"
+        --skip-email
+  wordpress-files:
+    image: wordpress:latest
+    # Copies WordPress into wp_data and writes wp-config.php without starting Apache.
+    command: ["docker-ensure-installed.sh", "true"]
+    volumes:
+      - wp_data:/var/www/html
+    environment: *wordpress-env
 volumes:
   db_data:
-
-  
-    
+  wp_data:
