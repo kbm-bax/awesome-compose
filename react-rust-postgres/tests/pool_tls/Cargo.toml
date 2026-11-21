@@ -1,0 +1,14 @@
+[package]
+name = "pool_tls_check"
+version = "0.1.0"
+edition = "2018"
+publish = false
+
+# deadpool-postgres 0.9.0 is the only 0.9 release and depends on tokio-postgres 0.7.
+# 0.7.10 is the newest 0.7 that still resolves on the Rust 1.83 toolchain used here;
+# its NoTls connector is the one create_pool passes.
+[dependencies]
+deadpool-postgres = "=0.9.0"
+tokio-postgres = "=0.7.10"
+tokio-postgres-migration = "=0.1.0"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
