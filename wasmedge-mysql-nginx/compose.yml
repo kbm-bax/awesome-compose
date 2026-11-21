@@ -18,6 +18,10 @@ services:
       RUST_BACKTRACE: full
     restart: unless-stopped
     runtime: io.containerd.wasmedge.v1
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   db:
     image: mariadb:10.9
