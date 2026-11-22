@@ -16,18 +16,51 @@
   const shippingField = document.getElementById("shippingAmount");
   const shippingAddressField = document.getElementById("shippingAddress");
 
+  const TOKEN_KEY = "orderApiToken";
+
+  class UnauthorizedError extends Error {}
+
+  function getToken() {
+    let token = sessionStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      token = window.prompt("Enter the order API token (ORDER_API_TOKEN)") || "";
+      if (token) {
+        sessionStorage.setItem(TOKEN_KEY, token);
+      }
+    }
+    return token;
+  }
+
+  function api(path, options = {}) {
+    const headers = Object.assign({}, options.headers, {
+      Authorization: `Bearer ${getToken()}`,
+    });
+    return fetch(`/api${path}`, Object.assign({}, options, { headers }))
+      .then((r) => {
+        if (r.status === 401) {
+          sessionStorage.removeItem(TOKEN_KEY);
+          throw new UnauthorizedError("The order API token was rejected");
+        }
+        return r;
+      });
+  }
+
   function fetchOrders() {
-    fetch("http://localhost:8080/orders")
+    api("/orders")
       .then(r => r.json())
       .then(r => orders = r)
       .then(renderOrders)
       .catch((e) => {
+        if (e instanceof UnauthorizedError) {
+          displayError(e.message);
+          return;
+        }
         init();
       });
   }
 
   function init() {
-    fetch("http://localhost:8080/init")
+    api("/init", { method: "POST" })
       .then(() => fetchOrders())
       .catch((e) => displayError(e));
   }
@@ -89,8 +122,9 @@
   }
 
   function deleteOrder(orderId) {
-    fetch(`http://localhost:8080/delete_order?id=${orderId}`)
-      .then(() => fetchOrders());
+    api(`/delete_order?id=${encodeURIComponent(orderId)}`, { method: "POST" })
+      .then(() => fetchOrders())
+      .catch((e) => displayError(e));
   }
 
   function displayError(err) {
@@ -110,12 +144,13 @@
       shipping_address : shippingAddressField.value,
     };
 
-    fetch("http://localhost:8080/create_order", {
+    api("/create_order", {
       method: "POST",
       body: JSON.stringify(data),
       headers: { "Content-type": "application/json" },
     }).then(() => fetchOrders())
-      .then(() => resetAddOrderForm());
+      .then(() => resetAddOrderForm())
+      .catch((e) => displayError(e));
 
     alert("Order added");
   }
