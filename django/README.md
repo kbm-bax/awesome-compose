@@ -46,6 +46,14 @@ CONTAINER ID        IMAGE               COMMAND                  CREATED        
 
 After the application starts, navigate to `http://localhost:8000` in your web browser:
 
+Debug mode is off by default because Django's debug pages expose the
+application's settings and server paths to anyone who can reach port 8000.
+To turn it on for local development only, set `DEBUG=true` in the `web`
+service's `environment` (or in a `.env` file next to `manage.py`). Set
+`SECRET_KEY` the same way to keep sessions valid across restarts; otherwise a
+random key is generated at startup. Set `ALLOWED_HOSTS` to a comma-separated
+list when serving on a host name other than `localhost` or `127.0.0.1`.
+
 Stop and remove the containers
 ```
 $ docker compose down

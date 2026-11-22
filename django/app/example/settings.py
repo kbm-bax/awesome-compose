@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/1.11/ref/settings/
 
 import os
 
+from django.core.management.utils import get_random_secret_key
 from environs import Env
 from dotenv import load_dotenv
 from dotenv import find_dotenv
@@ -28,11 +29,13 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # See https://docs.djangoproject.com/en/1.11/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env('SECRET_KEY',
-                'h8+mu_iy6%5j%7+hp**+gsq$nmy!!mjd8z_qkd94@z!%9%!+qn')
+# Without SECRET_KEY set, a random key is generated at startup, so sessions
+# and signed values do not survive a restart.
+SECRET_KEY = env('SECRET_KEY', None) or get_random_secret_key()
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env.bool('DEBUG', True)
+# Debug pages disclose settings and server paths, so debug mode is opt-in.
+DEBUG = env.bool('DEBUG', False)
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", ("localhost", "127.0.0.1"))
 
