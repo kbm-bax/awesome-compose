@@ -1,3 +1,4 @@
+use hyper::body::HttpBody;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, StatusCode, Server};
 pub use mysql_async::prelude::*;
@@ -6,7 +7,12 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::result::Result;
 use std::collections::HashMap;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+
+// A panic aborts the whole process on wasm32-wasi, so request bodies must be
+// bounded and parse failures must turn into responses, never unwraps.
+const MAX_BODY_BYTES: usize = 64 * 1024;
 
 fn get_url() -> String {
     if let Ok(url) = std::env::var("DATABASE_URL") {
@@ -75,7 +81,7 @@ async fn handle_request(req: Request<Body>, pool: Pool) -> Result<Response<Body>
         (&Method::OPTIONS, "/orders") => Ok(response_build(&String::from(""))),
         
         (&Method::GET, "/init") => {
-            let mut conn = pool.get_conn().await.unwrap();
+            let mut conn = pool.get_conn().await?;
             "DROP TABLE IF EXISTS orders;".ignore(&mut conn).await?;
             "CREATE TABLE orders (order_id INT, product_id INT, quantity INT, amount FLOAT, shipping FLOAT, tax FLOAT, shipping_address VARCHAR(20));".ignore(&mut conn).await?;
             drop(conn);
@@ -83,10 +89,11 @@ async fn handle_request(req: Request<Body>, pool: Pool) -> Result<Response<Body>
         }
 
         (&Method::POST, "/create_order") => {
-            let mut conn = pool.get_conn().await.unwrap();
-
-            let byte_stream = hyper::body::to_bytes(req).await?;
-            let order: Order = serde_json::from_slice(&byte_stream).unwrap();
+            let order: Order = match read_json(req).await {
+                Ok(order) => order,
+                Err(resp) => return Ok(resp),
+            };
+            let mut conn = pool.get_conn().await?;
 
             "INSERT INTO orders (order_id, product_id, quantity, amount, shipping, tax, shipping_address) VALUES (:order_id, :product_id, :quantity, :amount, :shipping, :tax, :shipping_address)"
                 .with(params! {
@@ -106,10 +113,14 @@ async fn handle_request(req: Request<Body>, pool: Pool) -> Result<Response<Body>
         }
 
         (&Method::POST, "/create_orders") => {
-            let mut conn = pool.get_conn().await.unwrap();
-
-            let byte_stream = hyper::body::to_bytes(req).await?;
-            let orders: Vec<Order> = serde_json::from_slice(&byte_stream).unwrap();
+            let orders: Vec<Order> = match read_json(req).await {
+                Ok(orders) => orders,
+                Err(resp) => return Ok(resp),
+            };
+            if orders.is_empty() {
+                return Ok(error_response(StatusCode::BAD_REQUEST, "expected at least one order"));
+            }
+            let mut conn = pool.get_conn().await?;
 
             "INSERT INTO orders (order_id, product_id, quantity, amount, shipping, tax, shipping_address) VALUES (:order_id, :product_id, :quantity, :amount, :shipping, :tax, :shipping_address)"
                 .with(orders.iter().map(|order| {
@@ -131,10 +142,11 @@ async fn handle_request(req: Request<Body>, pool: Pool) -> Result<Response<Body>
         }
 
         (&Method::POST, "/update_order") => {
-            let mut conn = pool.get_conn().await.unwrap();
-
-            let byte_stream = hyper::body::to_bytes(req).await?;
-            let order: Order = serde_json::from_slice(&byte_stream).unwrap();
+            let order: Order = match read_json(req).await {
+                Ok(order) => order,
+                Err(resp) => return Ok(resp),
+            };
+            let mut conn = pool.get_conn().await?;
 
             "UPDATE orders SET product_id=:product_id, quantity=:quantity, amount=:amount, shipping=:shipping, tax=:tax, shipping_address=:shipping_address WHERE order_id=:order_id"
                 .with(params! {
@@ -154,7 +166,7 @@ async fn handle_request(req: Request<Body>, pool: Pool) -> Result<Response<Body>
         }
 
         (&Method::GET, "/orders") => {
-            let mut conn = pool.get_conn().await.unwrap();
+            let mut conn = pool.get_conn().await?;
 
             let orders = "SELECT * FROM orders"
                 .with(())
@@ -175,7 +187,7 @@ async fn handle_request(req: Request<Body>, pool: Pool) -> Result<Response<Body>
         }        
         
         (&Method::GET, "/delete_order") => {
-            let mut conn = pool.get_conn().await.unwrap();
+            let mut conn = pool.get_conn().await?;
 
             let params: HashMap<String, String> = req.uri().query().map(|v| {
                 url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
@@ -208,6 +220,29 @@ fn response_build(body: &str) -> Response<Body> {
         .header("Access-Control-Allow-Headers", "api,Keep-Alive,User-Agent,Content-Type")
         .body(Body::from(body.to_owned()))
         .unwrap()
+}
+
+fn error_response(status: StatusCode, message: &str) -> Response<Body> {
+    let mut resp = response_build(&serde_json::json!({ "status": false, "error": message }).to_string());
+    *resp.status_mut() = status;
+    resp
+}
+
+async fn read_json<T: DeserializeOwned>(req: Request<Body>) -> Result<T, Response<Body>> {
+    let too_large = || error_response(StatusCode::PAYLOAD_TOO_LARGE, "request body too large");
+    let mut body = req.into_body();
+    if body.size_hint().lower() > MAX_BODY_BYTES as u64 {
+        return Err(too_large());
+    }
+    let mut buf = Vec::new();
+    while let Some(chunk) = body.data().await {
+        let chunk = chunk.map_err(|_| error_response(StatusCode::BAD_REQUEST, "failed to read request body"))?;
+        if buf.len() + chunk.len() > MAX_BODY_BYTES {
+            return Err(too_large());
+        }
+        buf.extend_from_slice(&chunk);
+    }
+    serde_json::from_slice(&buf).map_err(|e| error_response(StatusCode::BAD_REQUEST, &format!("invalid order JSON: {}", e)))
 }
 
 #[tokio::main(flavor = "current_thread")]
