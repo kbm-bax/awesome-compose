@@ -8,8 +8,25 @@ RUN <<EOT bash
         clang
     rustup target add wasm32-wasi
 EOT
-# This line installs WasmEdge including the AOT compiler
-RUN curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash
+# Install WasmEdge, including the AOT compiler, from a pinned release archive.
+# The archive is checked against the SHA256SUM published with the release
+# before it is unpacked; bump the version and both digests together.
+RUN <<'EOT' bash
+    set -euxo pipefail
+    version=0.11.2
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64)  digest=784bf1eb25928e2cf02aa88e9372388fad682b4a188485da3cd9162caeedf143 ;;
+        aarch64) digest=a2766a4c1edbaea298a30e5431a4e795003a10d8398a933d923f23d4eb4fa5d1 ;;
+        *) echo "unsupported build architecture: $arch" >&2; exit 1 ;;
+    esac
+    archive=/tmp/wasmedge.tar.gz
+    curl -fsSL -o "$archive" "https://github.com/WasmEdge/WasmEdge/releases/download/${version}/WasmEdge-${version}-manylinux2014_${arch}.tar.gz"
+    echo "${digest}  ${archive}" | sha256sum -c -
+    mkdir -p /root/.wasmedge
+    tar -xzf "$archive" -C /root/.wasmedge --strip-components=1
+    rm -f "$archive"
+EOT
 
 FROM buildbase AS build
 COPY Cargo.toml .
