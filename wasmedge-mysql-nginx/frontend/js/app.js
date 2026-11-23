@@ -27,7 +27,7 @@
   }
 
   function init() {
-    fetch("http://localhost:8080/init")
+    fetch("http://localhost:8080/init", { method: "POST" })
       .then(() => fetchOrders())
       .catch((e) => displayError(e));
   }
@@ -89,7 +89,7 @@
   }
 
   function deleteOrder(orderId) {
-    fetch(`http://localhost:8080/delete_order?id=${orderId}`)
+    fetch(`http://localhost:8080/delete_order?id=${orderId}`, { method: "POST" })
       .then(() => fetchOrders());
   }
 
