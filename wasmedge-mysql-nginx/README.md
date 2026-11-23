@@ -85,10 +85,10 @@ After the application starts, go to `http://localhost:8090` in your web browser 
 
 As an alternative to the web frontend, you can use `curl` to interact with the WasmEdge API directly (the `backend` service).
 
-When the WasmEdge web service receives a GET request to the `/init` endpoint, it would initialize the database with the `orders` table.
+When the WasmEdge web service receives a POST request to the `/init` endpoint, it would initialize the database with the `orders` table.
 
 ```bash
-curl http://localhost:8080/init
+curl http://localhost:8080/init -X POST
 ```
 
 When the WasmEdge web service receives a POST request to the `/create_order` endpoint, it extracts the JSON data from the POST body and inserts an `Order` record into the database table.
@@ -110,9 +110,16 @@ When the WasmEdge web service receives a POST request to the `/update_order` end
 curl http://localhost:8080/update_order -X POST -d @db/update_order.json
 ```
 
-When the WasmEdge web service receives a GET request to the `/delete_order` endpoint, it deletes the row in the `orders` table that matches the `id` GET parameter.
+When the WasmEdge web service receives a POST request to the `/delete_order` endpoint, it deletes the row in the `orders` table that matches the `id` query parameter.
 
 ```bash
-curl http://localhost:8080/delete_order?id=2
+curl "http://localhost:8080/delete_order?id=2" -X POST
 ```
+
+### Allowed origins and hosts
+
+The API only grants cross-origin access to the web frontend. Browser requests that carry any other `Origin` are refused for `POST` routes, and other responses are sent without CORS headers, so pages from other sites cannot read them. Requests whose `Host` is not an expected name are refused, which blocks DNS rebinding. Both lists can be changed with comma-separated environment variables on the `backend` service:
+
+* `ALLOWED_ORIGINS` (default `http://localhost:8090,http://127.0.0.1:8090`)
+* `ALLOWED_HOSTS` (default `localhost,127.0.0.1,[::1],backend`; ports are ignored)
 
